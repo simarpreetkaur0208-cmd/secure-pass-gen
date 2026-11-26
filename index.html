@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure Pass Gen</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #18181b; color: #f4f4f5; display: flex; justify-content: center; padding: 40px 20px; margin: 0; }
+    .app { width: 100%; max-width: 440px; background: #27272a; padding: 24px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    h1 { font-size: 1.4rem; margin: 0 0 6px; color: #c084fc; }
+    p.sub { font-size: 0.85rem; color: #a1a1aa; margin: 0 0 20px; }
+    .box { display: flex; gap: 8px; margin-bottom: 14px; }
+    input[type="text"] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #3f3f46; background: #18181b; color: #fff; font-family: monospace; font-size: 1rem; min-width: 0; }
+    button { background: #c084fc; color: #18181b; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    button.full { width: 100%; margin-top: 10px; }
+    .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.9rem; margin: 12px 0; }
+    label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .meter { background: #18181b; padding: 14px; border-radius: 10px; margin-top: 16px; border-left: 4px solid #71717a; }
+    .stat { font-size: 0.9rem; margin-top: 4px; color: #d4d4d8; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Secure Pass Gen</h1>
+    <p class="sub">Generate strong passwords or type any password to test crack time.</p>
+
+    <div class="box">
+      <input type="text" id="pw" placeholder="Type or generate password..." oninput="analyze()" />
+      <button onclick="copyPw()">Copy</button>
+    </div>
+
+    <label>Length: <strong id="lenVal" style="margin-left:6px;">16</strong></label>
+    <input type="range" id="len" min="8" max="32" value="16" style="width:100%;margin:8px 0;" oninput="document.getElementById('lenVal').textContent=this.value;generate()" />
+
+    <div class="opts">
+      <label><input type="checkbox" id="up" checked onchange="generate()" /> Uppercase (A-Z)</label>
+      <label><input type="checkbox" id="lo" checked onchange="generate()" /> Lowercase (a-z)</label>
+      <label><input type="checkbox" id="nu" checked onchange="generate()" /> Numbers (0-9)</label>
+      <label><input type="checkbox" id="sy" checked onchange="generate()" /> Symbols (!@#$)</label>
+    </div>
+
+    <button class="full" onclick="generate()">Generate New Password</button>
+
+    <div class="meter" id="meter">
+      <strong id="strength">Strength: —</strong>
+      <div class="stat" id="crackTime">Estimated brute-force time: —</div>
+    </div>
+  </div>
+
+  <script>
+    function generate() {
+      const len = +document.getElementById('len').value;
+      let chars = '';
+      if (document.getElementById('up').checked) chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      if (document.getElementById('lo').checked) chars += 'abcdefghijklmnopqrstuvwxyz';
+      if (document.getElementById('nu').checked) chars += '0123456789';
+      if (document.getElementById('sy').checked) chars += '!@#$%^&*()_+-=[]{}|;:,.<>?';
+      if (!chars) chars = 'abcdefghijklmnopqrstuvwxyz';
+
+      const arr = new Uint32Array(len);
+      crypto.getRandomValues(arr);
+      document.getElementById('pw').value = Array.from(arr, x => chars[x % chars.length]).join('');
+      analyze();
+    }
+
+    function analyze() {
+      const val = document.getElementById('pw').value;
+      const meter = document.getElementById('meter');
+      if (!val) {
+        document.getElementById('strength').textContent = 'Strength: —';
+        document.getElementById('crackTime').textContent = 'Estimated brute-force time: —';
+        meter.style.borderColor = '#71717a';
+        return;
+      }
+      let pool = 0;
+      if (/[a-z]/.test(val)) pool += 26;
+      if (/[A-Z]/.test(val)) pool += 26;
+      if (/[0-9]/.test(val)) pool += 10;
+      if (/[^a-zA-Z0-9]/.test(val)) pool += 32;
+
+      const entropy = val.length * Math.log2(pool || 1);
+      const guessesPerSec = 1e10; // 10 billion guesses/sec
+      const secs = Math.pow(2, entropy) / guessesPerSec;
+
+      let label = 'Weak', color = '#ef4444';
+      if (entropy >= 80) { label = 'Very Strong'; color = '#22c55e'; }
+      else if (entropy >= 60) { label = 'Strong'; color = '#84cc16'; }
+      else if (entropy >= 40) { label = 'Moderate'; color = '#eab308'; }
+
+      document.getElementById('strength').textContent = `Strength: ${label} (${Math.round(entropy)} bits)`;
+      document.getElementById('crackTime').textContent = `Est. crack time: ${formatTime(secs)}`;
+      meter.style.borderColor = color;
+    }
+
+    function formatTime(s) {
+      if (s < 1) return 'Instant';
+      if (s < 60) return `${Math.round(s)} seconds`;
+      if (s < 3600) return `${Math.round(s / 60)} minutes`;
+      if (s < 86400) return `${Math.round(s / 3600)} hours`;
+      if (s < 31536000) return `${Math.round(s / 86400)} days`;
+      const yrs = s / 31536000;
+      return yrs > 1e6 ? `${yrs.toExponential(1)} years` : `${Math.round(yrs).toLocaleString()} years`;
+    }
+
+    function copyPw() {
+      const el = document.getElementById('pw');
+      if (!el.value) return;
+      navigator.clipboard.writeText(el.value);
+    }
+    generate();
+  </script>
+</body>
+</html>
